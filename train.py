@@ -4,12 +4,14 @@ import time
 import math
 from datetime import timedelta
 from argparse import ArgumentParser
+from collections import defaultdict
 
 import torch
 from torch import cuda
 from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 from tqdm import tqdm
+import wandb
 
 from east_dataset import EASTDataset
 from dataset import SceneTextDataset
@@ -61,6 +63,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
     model.train()
     for epoch in range(max_epoch):
         epoch_loss, epoch_start = 0, time.time()
+        train_dict = defaultdict(int)
         with tqdm(total=num_batches) as pbar:
             for img, gt_score_map, gt_geo_map, roi_mask in train_loader:
                 pbar.set_description('[Epoch {}]'.format(epoch + 1))
@@ -74,13 +77,21 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
                 epoch_loss += loss_val
 
                 pbar.update(1)
-                val_dict = {
+                tmp_dict = {
                     'Cls loss': extra_info['cls_loss'], 'Angle loss': extra_info['angle_loss'],
                     'IoU loss': extra_info['iou_loss']
                 }
-                pbar.set_postfix(val_dict)
+                pbar.set_postfix(tmp_dict)
+
+                train_dict['train_total_loss'] += loss.item() / len(train_loader)
+                train_dict['train_cls_loss'] += extra_info['cls_loss'] / len(train_loader)
+                train_dict['train_angle_loss'] += extra_info['angle_loss'] / len(train_loader)
+                train_dict['train_iou_loss'] += extra_info['iou_loss'] / len(train_loader)
 
         scheduler.step()
+        train_dict['epoch'] = epoch
+        train_dict['learning_rate'] = optimizer.param_groups[0]['lr']
+        wandb.log(train_dict)
 
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
             epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
@@ -88,7 +99,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         if (epoch + 1) % save_interval == 0:
             if not osp.exists(model_dir):
                 os.makedirs(model_dir)
-            ckpt_fpath = osp.join(model_dir,kwargs['experiment_name'], 'latest.pth')
+            ckpt_fpath = osp.join(model_dir, kwargs['experiment_name'], 'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
 
