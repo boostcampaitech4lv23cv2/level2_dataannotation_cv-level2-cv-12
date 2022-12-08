@@ -14,7 +14,7 @@ from tqdm import tqdm
 from east_dataset import EASTDataset
 from dataset import SceneTextDataset
 from model import EAST
-
+from set_wandb import wandb_init
 
 def parse_args():
     parser = ArgumentParser()
@@ -35,6 +35,8 @@ def parse_args():
     parser.add_argument('--max_epoch', type=int, default=200)
     parser.add_argument('--save_interval', type=int, default=5)
 
+    parser.add_argument("--experiment_name",type=str,default="test")
+
     args = parser.parse_args()
 
     if args.input_size % 32 != 0:
@@ -44,7 +46,7 @@ def parse_args():
 
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval):
+                learning_rate, max_epoch, save_interval, **kwargs):
     dataset = SceneTextDataset(data_dir, split='train', image_size=image_size, crop_size=input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / batch_size)
@@ -86,8 +88,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         if (epoch + 1) % save_interval == 0:
             if not osp.exists(model_dir):
                 os.makedirs(model_dir)
-
-            ckpt_fpath = osp.join(model_dir, 'latest.pth')
+            ckpt_fpath = osp.join(model_dir,kwargs['experiment_name'], 'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
 
@@ -97,4 +98,5 @@ def main(args):
 
 if __name__ == '__main__':
     args = parse_args()
+    wandb_init(args)
     main(args)
