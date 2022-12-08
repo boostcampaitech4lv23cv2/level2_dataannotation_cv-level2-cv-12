@@ -52,7 +52,7 @@ def parse_args():
     return args
 
 
-def do_training(args):
+def do_training(args,model):
     print("\n### TRAINING ###")
     dataset = SceneTextDataset(args.data_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
@@ -60,8 +60,8 @@ def do_training(args):
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = EAST()
-    model.to(device)
+    #model = EAST()
+    #model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
 
@@ -107,18 +107,16 @@ def do_training(args):
             ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
-def do_warmup(args):
+def do_warmup(args, model):
     dataset = SceneTextDataset(args.data_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = EAST()
-    model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate*0.1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     #scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
-    scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=args.learning_rate, total_steps = args.warmup_epoch*len(train_loader), pct_start=1.0)
+    #scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=args.learning_rate, total_steps = args.warmup_epoch*len(train_loader), pct_start=1.0)
 
     model.train()
     print("\n### WARMING UP ###")
@@ -153,7 +151,7 @@ def do_warmup(args):
                 train_dict['warmup_angle_loss'] += extra_info['angle_loss'] / len(train_loader)
                 train_dict['warmup_iou_loss'] += extra_info['iou_loss'] / len(train_loader)
 
-        scheduler.step()
+        #scheduler.step()
         train_dict['warmup_epoch'] = epoch
         train_dict['learning_rate'] = optimizer.param_groups[0]['lr']
         wandb.log(train_dict)
@@ -173,9 +171,13 @@ def do_warmup(args):
     
 def main(args):
     set_seed(args.seed)
+
+    model = EAST()
+    model.to(args.device)
+
     if args.warmup:
-        do_warmup(args)
-    do_training(args)
+        do_warmup(args,model)
+    do_training(args,model)
 
 
 if __name__ == '__main__':
