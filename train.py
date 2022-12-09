@@ -16,7 +16,21 @@ from dataset import SceneTextDataset
 from model import EAST
 import numpy as np
 import pandas as pd
+import random
+from logger import logging, init_wandb, finish
 
+def seed_everything(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group["lr"]
 
 def parse_args():
     parser = ArgumentParser()
@@ -34,8 +48,10 @@ def parse_args():
     parser.add_argument('--input_size', type=int, default=512)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
-    parser.add_argument('--max_epoch', type=int, default=200)
-    parser.add_argument('--save_interval', type=int, default=5)
+    parser.add_argument('--max_epoch', type=int, default=300)
+    parser.add_argument('--optimizer', type=str, default="Adam")
+    parser.add_argument('--scheduler', type=str, default="MultiStepLR")
+    parser.add_argument('--desc', type=str, default="baseline")
 
     args = parser.parse_args()
 
@@ -46,7 +62,7 @@ def parse_args():
 
 
 def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval):
+                learning_rate, max_epoch, optimizer, scheduler, desc):
     dataset = SceneTextDataset(data_dir, split='train', image_size=image_size, crop_size=input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / batch_size)
@@ -86,10 +102,13 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
         scheduler.step()
 
         mean_loss = epoch_loss / num_batches
-        cls_losses.append(extra_info['cls_loss'])
-        angle_losses.append(extra_info['angle_loss'])
-        iou_losses.append(extra_info['iou_loss'])
-        mean_losses.append(mean_loss)
+        cur_lr = get_lr(optimizer)
+        # cls_losses.append(extra_info['cls_loss'])
+        # angle_losses.append(extra_info['angle_loss'])
+        # iou_losses.append(extra_info['iou_loss'])
+        # mean_losses.append(mean_loss)
+        
+        logging(cur_lr, extra_info['cls_loss'], extra_info['angle_loss'], extra_info['iou_loss'], mean_loss)
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
             mean_loss, timedelta(seconds=time.time() - epoch_start)))
 
@@ -102,14 +121,17 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
             
             min_mean_loss = mean_loss
             
-    train_logs = np.stack([cls_losses, angle_losses, iou_losses, mean_losses], axis=1)
+    # train_logs = np.stack([cls_losses, angle_losses, iou_losses, mean_losses], axis=1)
 
-    train_log_df = pd.DataFrame(train_logs, columns=["cls_loss", "angle_loss", "iou_loss", "mean_loss"])
-    train_log_df.to_csv(osp.join(model_dir, 'train_log.csv'), sep=",", index=None)
+    # train_log_df = pd.DataFrame(train_logs, columns=["cls_loss", "angle_loss", "iou_loss", "mean_loss"])
+    # train_log_df.to_csv(osp.join(model_dir, 'train_log.csv'), sep=",", index=None)
+    finish()
 
 def main(args):
     do_training(**args.__dict__)
 
 if __name__ == '__main__':
     args = parse_args()
+    seed_everything(41)
+    init_wandb(args)
     main(args)
