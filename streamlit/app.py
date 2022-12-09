@@ -35,10 +35,11 @@ def draw_bbox(img, word_idx, points, color, thickness):
     text_pos = [textX, textY]
 
     cv.putText(img, word_idx, text_pos, fontFace=font, fontScale=fontscale, color=color, thickness=text_thickness)
-    cv.arrowedLine(img, points[0], points[1], color, thickness, tipLength = 0.1)
-    cv.arrowedLine(img, points[1], points[2], color, thickness, tipLength = 0.1)
-    cv.arrowedLine(img, points[2], points[3], color, thickness, tipLength = 0.1)
-    cv.arrowedLine(img, points[3], points[0], color, thickness, tipLength = 0.1)
+    for i in range(len(points) - 1):
+        cv.arrowedLine(img, points[i], points[i + 1], color, thickness, tipLength = 0.1)
+    cv.arrowedLine(img, points[i + 1], points[0], color, thickness, tipLength = 0.1)
+    
+
     cv.circle(img, points[0], radius=7, color=(255, 255, 0), thickness=-1) # start point
 
     return img
@@ -111,8 +112,10 @@ def main():
     # img_idx = int(st.sidebar.number_input(f'보고싶은 이미지의 인덱스 (max {img_len - 1})', value=0))
     if "img_idx" not in st.session_state:
         st.session_state["img_idx"] = 0
-    
-    if st.sidebar.button('Next'):
+    side_col1, side_col2, side_col3 = st.sidebar.columns([1,1,3])
+    if side_col1.button('Prev'):
+        st.session_state["img_idx"] -= 1
+    if side_col2.button('Next'):
         st.session_state["img_idx"] += 1
     st.session_state["img_idx"] = st.sidebar.selectbox('Selcet Image', range(len(img_filenames)), format_func=lambda x:img_filenames[x], index=st.session_state["img_idx"])
     
@@ -133,7 +136,6 @@ def main():
     side_col1.text('GT')
     side_col2.text('Inferred')
 
-
     if "gt_checkbox" not in st.session_state:
         st.session_state["gt_checkbox"] = True
     if "infer_checkbox" not in st.session_state:
@@ -148,28 +150,26 @@ def main():
         st.session_state["infer_checkbox"] = False
     
     for k, v in words.items():
-        with side_col1:
-            check = st.checkbox(f"{k} {v['transcription']}", value=st.session_state["gt_checkbox"])
-        if check:
-            if v['illegibility']:
-                draw_illegibility(img, v['points'], (0,0,0))
-            elif check_orientation(v['orientation'], ori) and check_language(v['language'], lang):
+        if v['illegibility']:
+            draw_illegibility(img, v['points'], (0,0,0))
+            continue
+        if check_orientation(v['orientation'], ori) and check_language(v['language'], lang):
+            with side_col1:
+                check = st.checkbox(f"{k} {v['transcription']}", value=st.session_state["gt_checkbox"])
+            if check:
                 draw_bbox(img, k, v['points'], (255, 0, 0), 3)
     
     ## Infer 결과로 수정 예정
-    for k, v in words.items():
-        with side_col2:
-            check2 = st.checkbox(f"infer {k} {v['transcription']}", value=st.session_state["infer_checkbox"])
-    
-    ## TODO
-    ## metadata 기반 박스 on/off 기능
-
+    # for k, v in words.items():
+    #     if check_orientation(v['orientation'], ori) and check_language(v['language'], lang):
+    #         with side_col2:
+    #             check2 = st.checkbox(f"infer {k} {v['transcription']}", value=st.session_state["infer_checkbox"])
 
     st.header(img_filename)
     col1, col2 = st.columns(2)
     col1.text('Ground Truth')
     col1.image(img)
     col2.text('Inferred')
-    col2.image(img)
+    # col2.image(img)
 
 main()
