@@ -71,8 +71,16 @@ def main():
     #image index 설정
     img_filenames = list(gt_data['images'].keys())
     img_len = len(img_filenames)
-    img_idx = int(st.sidebar.number_input(f'보고싶은 이미지의 인덱스 (max {img_len - 1})', value=0))
-
+    
+    # img_idx = int(st.sidebar.number_input(f'보고싶은 이미지의 인덱스 (max {img_len - 1})', value=0))
+    if "img_idx" not in st.session_state:
+        st.session_state["img_idx"] = 0
+    
+    if st.sidebar.button('Next'):
+        st.session_state["img_idx"] += 1
+    st.session_state["img_idx"] = st.sidebar.selectbox('Selcet Image', range(len(img_filenames)), format_func=lambda x:img_filenames[x], index=st.session_state["img_idx"])
+    
+    img_idx = st.session_state["img_idx"]
     img_filename = img_filenames[img_idx]
 
     dataset_path = args.dataset_path
@@ -101,7 +109,6 @@ def main():
     
     for k, v in words.items():
         with side_col1:
-            
             check = st.checkbox(f"{k} {v['transcription']}", value=st.session_state["gt_checkbox"])
         if check:
             draw_bbox(img, k, v['points'], (255, 0, 0), 3)
@@ -111,6 +118,10 @@ def main():
         with side_col2:
             check2 = st.checkbox(f"infer {k} {v['transcription']}", value=st.session_state["infer_checkbox"])
     
+    ## TODO
+    ## metadata 기반 박스 on/off 기능
+
+
     st.header(img_filename)
     col1, col2 = st.columns(2)
     col1.text('Ground Truth')
