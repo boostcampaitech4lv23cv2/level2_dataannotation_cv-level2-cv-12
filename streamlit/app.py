@@ -14,7 +14,7 @@ st.set_page_config(layout="wide")
 ## ex) streamlit run app.py --server.port=30001 -- --submission_csv <path> --gt_json <path> --dataset_path <path>
 parser = argparse.ArgumentParser(description='basic Argparse')
 parser.add_argument('--submission_csv', type=str, default=None, help='Infered된 csv 파일의 경로 ex)~/submission.csv')
-parser.add_argument('--gt_json', type=str, default='/opt/ml/input/data/dataset/ufo/annotation.json', help='Ground Truth 데이터의 json 파일 경로 ex)/opt/ml/dataset/train.json')
+parser.add_argument('--gt_json', type=str, default='/opt/ml/input/data/total_data/ufo/train.json', help='Ground Truth 데이터의 json 파일 경로 ex)/opt/ml/dataset/train.json')
 parser.add_argument('--dataset_path', type=str, default='/opt/ml/input/data/dataset/images', help='데이터셋 폴더 경로 ex)/opt/ml/dataset/')
 args = parser.parse_args()
 

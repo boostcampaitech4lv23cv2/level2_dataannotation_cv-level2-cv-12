@@ -40,5 +40,7 @@ class EASTLoss(nn.Module):
         geo_loss = angle_loss + iou_loss
         total_loss = classify_loss + geo_loss
 
+        print(classify_loss.item(), angle_loss.item(), iou_loss.item())
+
         return total_loss, dict(cls_loss=classify_loss.item(), angle_loss=angle_loss.item(),
                                 iou_loss=iou_loss.item())

@@ -351,6 +351,7 @@ class SceneTextDataset(Dataset):
 
     def __getitem__(self, idx):
         image_fname = self.image_fnames[idx]
+        # print(image_fname)
         image_fpath = osp.join(self.image_dir, image_fname)
 
         vertices, labels = [], []
