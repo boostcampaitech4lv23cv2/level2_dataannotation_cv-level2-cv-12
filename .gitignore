@@ -180,4 +180,4 @@ poetry.toml
 # End of https://www.toptal.com/developers/gitignore/api/python
 wandb/latest-run
 
-[오피스아워] 데이터 제작 CV_13주차_신승_data_preparation(final).ipynb
+data_preparation(final).ipynb
