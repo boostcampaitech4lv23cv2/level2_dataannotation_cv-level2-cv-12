@@ -1,2 +1,4 @@
 __pycache__/
 *.pth
+set_wandb.py
+wandb/*
