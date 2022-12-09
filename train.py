@@ -16,8 +16,8 @@ import wandb
 from east_dataset import EASTDataset
 from dataset import SceneTextDataset
 from model import EAST
-from utils import set_seed
-from set_wandb import wandb_init
+from utils.seed import set_seed
+from logger.set_wandb import wandb_init
 
 def parse_args():
     parser = ArgumentParser()
@@ -33,7 +33,7 @@ def parse_args():
 
     parser.add_argument('--image_size', type=int, default=1024)
     parser.add_argument('--input_size', type=int, default=512)
-    parser.add_argument('--batch_size', type=int, default=12)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_epoch', type=int, default=200)
     parser.add_argument('--save_interval', type=int, default=5)
@@ -59,9 +59,6 @@ def do_training(args,model):
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #model = EAST()
-    #model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
 
@@ -113,10 +110,7 @@ def do_warmup(args, model):
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    #scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
-    #scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=args.learning_rate, total_steps = args.warmup_epoch*len(train_loader), pct_start=1.0)
 
     model.train()
     print("\n### WARMING UP ###")
@@ -151,20 +145,13 @@ def do_warmup(args, model):
                 train_dict['warmup_angle_loss'] += extra_info['angle_loss'] / len(train_loader)
                 train_dict['warmup_iou_loss'] += extra_info['iou_loss'] / len(train_loader)
 
-        #scheduler.step()
         train_dict['warmup_epoch'] = epoch
         train_dict['learning_rate'] = optimizer.param_groups[0]['lr']
         wandb.log(train_dict)
 
         print('Mean loss: {:.4f} | Elapsed time: {}'.format(
             epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
-
-        # if (epoch + 1) % args.save_interval == 0:
-        #     if not osp.exists(args.model_dir):
-        #         os.makedirs(args.model_dir)
-        #     ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'latest.pth')
-        #     torch.save(model.state_dict(), ckpt_fpath)
-
+        
     for name, param in model.named_parameters():
         if 'extractor' in name:
             param.requires_grad = True
@@ -176,8 +163,8 @@ def main(args):
     model.to(args.device)
 
     if args.warmup:
-        do_warmup(args,model)
-    do_training(args,model)
+        do_warmup(args, model)
+    do_training(args, model)
 
 
 if __name__ == '__main__':
