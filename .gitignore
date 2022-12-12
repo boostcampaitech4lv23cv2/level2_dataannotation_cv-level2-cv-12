@@ -181,3 +181,4 @@ poetry.toml
 wandb/latest-run
 
 data_preparation(final).ipynb
+logger/set_wandb.py
