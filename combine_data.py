@@ -20,7 +20,7 @@ def parse_args():
 
     return args
 
-
+# --이미지 파일은 수작업으로 sava_path의 상위 폴더에서 images 폴더를 만들어 복사해서 넣음!
 def main(args):
     data_path = args.data_path_list
     json_data_list = list()
