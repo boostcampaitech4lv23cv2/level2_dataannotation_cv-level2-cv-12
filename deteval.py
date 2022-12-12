@@ -131,6 +131,7 @@ def calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict, transcriptions_dict=N
     # bbox들이 rect 이외의 형식으로 되어있는 경우 rect 형식으로 변환
     _pred_bboxes_dict, _gt_bboxes_dict= deepcopy(pred_bboxes_dict), deepcopy(gt_bboxes_dict)
     pred_bboxes_dict, gt_bboxes_dict = dict(), dict()
+
     for sample_name, bboxes in _pred_bboxes_dict.items():
         # 원래 rect 형식이었으면 변환 없이 그대로 이용
         if len(bboxes) > 0 and np.array(bboxes[0]).ndim == 1 and len(bboxes[0]) == 4:
@@ -141,6 +142,7 @@ def calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict, transcriptions_dict=N
         for bbox in map(np.array, bboxes):
             rect = [bbox[:, 0].min(), bbox[:, 1].min(), bbox[:, 0].max(), bbox[:, 1].max()]
             pred_bboxes_dict[sample_name].append(rect)
+
     for sample_name, bboxes in _gt_bboxes_dict.items():
         # 원래 rect 형식이었으면 변환 없이 그대로 이용
         if len(bboxes) > 0 and np.array(bboxes[0]).ndim == 1 and len(bboxes[0]) == 4:
@@ -347,3 +349,30 @@ def calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict, transcriptions_dict=N
                'per_sample': perSampleMetrics, 'eval_hparams': eval_hparams}
 
     return resDict
+
+if __name__ =='__main__':
+    import json
+    import os.path as osp
+
+    output_fname = 'valid_text.csv'
+    #output_fname = 'valid.csv'
+
+    with open(osp.join('../input/data/total_data', 'ufo/{}.json'.format('train')), 'r') as f:
+        gt_bboxes_dict = json.load(f)['images']
+
+    with open(output_fname, 'r') as f:
+        pred_bboxes_dict = json.load(f)['images']
+    
+    transcriptions_dict = {}
+    for image_fname in gt_bboxes_dict:
+        transcriptions_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['transcription'] for i in gt_bboxes_dict[image_fname]['words']]
+        gt_bboxes_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['points'] for i in gt_bboxes_dict[image_fname]['words']]
+
+    for image_fname in pred_bboxes_dict:
+        pred_bboxes_dict[image_fname] = [pred_bboxes_dict[image_fname]['words'][i]['points'] for i in pred_bboxes_dict[image_fname]['words']]
+    resDict = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict,transcriptions_dict)
+
+
+    output_fname = 'valid_result.json'
+    with open(osp.join('.', output_fname), 'w') as f:
+        json.dump(resDict, f, indent=4)
