@@ -193,8 +193,8 @@ def calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict, transcriptions_dict=N
 
         for n in range(len(pointsList)):
             points = pointsList[n]
-            transcription = transcriptionsList[n]
-            dontCare = transcription == "###"
+            dontCare = transcriptionsList[n]
+            #dontCare = transcription == "###"
             gtRect = Rectangle(*points)
             gtRects.append(gtRect)
             gtPolPoints.append(np.array(points).tolist())
@@ -354,8 +354,8 @@ if __name__ =='__main__':
     import json
     import os.path as osp
 
-    output_fname = 'valid_text.csv'
-    #output_fname = 'valid.csv'
+    #output_fname = 'valid_text.csv'
+    output_fname = 'valid.csv'
 
     with open(osp.join('../input/data/total_data', 'ufo/{}.json'.format('train')), 'r') as f:
         gt_bboxes_dict = json.load(f)['images']
@@ -365,14 +365,13 @@ if __name__ =='__main__':
     
     transcriptions_dict = {}
     for image_fname in gt_bboxes_dict:
-        transcriptions_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['transcription'] for i in gt_bboxes_dict[image_fname]['words']]
+        transcriptions_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['illegibility'] for i in gt_bboxes_dict[image_fname]['words']]
         gt_bboxes_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['points'] for i in gt_bboxes_dict[image_fname]['words']]
 
     for image_fname in pred_bboxes_dict:
-        pred_bboxes_dict[image_fname] = [pred_bboxes_dict[image_fname]['words'][i]['points'] for i in pred_bboxes_dict[image_fname]['words']]
+       pred_bboxes_dict[image_fname] = [pred_bboxes_dict[image_fname]['words'][i]['points'] for i in pred_bboxes_dict[image_fname]['words']]
+
     resDict = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict,transcriptions_dict)
-
-
-    output_fname = 'valid_result.json'
+    output_fname = 'valid_illegibility.json'
     with open(osp.join('.', output_fname), 'w') as f:
         json.dump(resDict, f, indent=4)
