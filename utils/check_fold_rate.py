@@ -1,51 +1,64 @@
 import json
 import pandas as pd
+from collections import defaultdict
 
-def check_fold_info():
-    folds = []
+def check_fold_info(orientation_info : dict, split_num : int):
+    orientations = [orientation for orientation in orientation_info]
 
-    for i in range(5):
-        with open(f'/opt/ml/input/data/ICDAR17_Korean/kfold/seed42/train_{i}.json', 'r', encoding='utf-8') as file:
+    fold_names, rates = [], []
+    train_infos, val_infos = [], []
+    
+    for i in range(split_num):
+        with open(f'/opt/ml/input/data/total_data/kfold/seed42/train_{i}.json', 'r', encoding='utf-8') as file:
             trains = json.load(file)['images']
             
-        with open(f'/opt/ml/input/data/ICDAR17_Korean/kfold/seed42/val_{i}.json', 'r', encoding='utf-8') as file:
+        with open(f'/opt/ml/input/data/total_data/kfold/seed42/val_{i}.json', 'r', encoding='utf-8') as file:
             vals = json.load(file)['images']
-            
-        en_cnt, en_val_cnt = 0, 0
-        ko_cnt, ko_val_cnt = 0, 0
-
+        
+        train_info = defaultdict(int)
+        val_info = defaultdict(int)
+        
         for train in trains:
             words = trains[train]['words']
-            for word in words:
-                if words[word]['language'] == ['en']:
-                    en_cnt += 1
-                else:
-                    ko_cnt += 1
+            for word_key in words:
+                orientation = words[word_key]['orientation']
+                train_info[orientation] += 1
 
         for val in vals:
             words = vals[val]['words']
-            for word in words:
-                if words[word]['language'] == ['en']:
-                    en_val_cnt += 1
-                else:
-                    ko_val_cnt += 1
+            for word_key in words:
+                    orientation = words[word_key]['orientation']
+                    val_info[orientation] += 1
         
-        folds.append([en_cnt, ko_cnt, en_val_cnt, ko_val_cnt])
-        
-    index = []
-    dist = []
+        train_infos.append(train_info)
+        val_infos.append(val_info)
 
-    for idx, fold in enumerate(folds):
-        en_total = fold[0] + fold[2]
-        ko_total = fold[1] + fold[3]
+    for idx, (train_info, val_info) in enumerate(zip(train_infos, val_infos)):
+        fold_names.append(f'train_fold_{idx}')
+        fold_names.append(f'val_fold_{idx}')
+        rates.append([f'{train_info[orientation]/orientation_info[orientation]*100:.2f}%' for orientation in orientations])
+        rates.append([f'{val_info[orientation]/orientation_info[orientation]*100:.2f}%' for orientation in orientations])
         
-        dist.append([f'{fold[0]/en_total*100:.2f}%', f'{fold[1]/ko_total*100:.2f}%'])
-        dist.append([f'{fold[2]/en_total*100:.2f}%', f'{fold[3]/ko_total*100:.2f}%'])
-        index.append(f'train_fold_{idx}')
-        index.append(f'val_fold_{idx}')
-        
-    df = pd.DataFrame(dist, index=index, columns=['en', 'ko'])
+    df = pd.DataFrame(rates, index=fold_names, columns=orientations)
     print(df)
     
-if __name__ == "__main__": 
-    check_fold_info()
+def check_raw_info():
+    with open('../../input/data/total_data/ufo/train.json', 'r', encoding='utf-8') as file:
+        data = json.load(file)['images']
+
+    orientation_info = defaultdict(int)
+
+    for key in data:
+        words = data[key]['words']
+        for word_key in words:
+            orientation = words[word_key]['orientation']
+            orientation_info[orientation] += 1
+            
+    return dict(orientation_info)
+    
+if __name__ == "__main__":
+    orientation_info = check_raw_info()
+    print()
+    print(orientation_info)
+    print()
+    check_fold_info(orientation_info, split_num=5)
