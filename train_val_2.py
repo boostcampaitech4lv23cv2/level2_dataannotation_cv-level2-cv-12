@@ -61,16 +61,10 @@ def parse_args():
 
     return args
 
-def do_training(args,model):
-    print("\n##### TRAINING #####")
-    dataset = SceneTextDataset(args.train_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
-    dataset = EASTDataset(dataset)
-    num_batches = math.ceil(len(dataset) / args.batch_size)
-    train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-
-    with open(osp.join(args.val_dir, 'ufo/{}.json'.format('annotation')), 'r') as f:
+def make_valset(args,val_dir,json_name):
+    with open(osp.join(val_dir, 'ufo/{}.json'.format(json_name)), 'r') as f:
         val_gt_dict = json.load(f)['images']
-    val_image_dir = osp.join(args.val_dir,'images')
+    val_image_dir = osp.join(val_dir,'images')
 
     val_illegibility_dict = {}
     for image_fname in val_gt_dict:
@@ -80,9 +74,21 @@ def do_training(args,model):
     val_dataset = ValidationDataset(image_fnames=list(val_gt_dict.keys()),image_dir=val_image_dir,input_size=args.val_input_size)
     val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=args.num_workers)
 
+    return val_loader, val_gt_dict, val_illegibility_dict
+
+def do_training(args,model):
+    print("\n##### TRAINING #####")
+    dataset = SceneTextDataset(args.train_dir, split='train_poly', image_size=args.image_size, crop_size=args.input_size)
+    dataset = EASTDataset(dataset)
+    num_batches = math.ceil(len(dataset) / args.batch_size)
+    train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
-    best_score, best_epoch  = 0, 0
+    best_score_1, best_score_2, best_epoch_1, best_epoch_2 = 0, 0, 0, 0
+
+    val_loader, val_gt_dict, val_illegibility_dict = make_valset(args=args,val_dir='../input/data/ICDAR17_Korean',json_name='train')
+    val_loader_2, val_gt_dict_2, val_illegibility_dict_2 = make_valset(args=args,val_dir='../input/data/kfold/val_3',json_name='val_3')
 
     for epoch in range(1,args.max_epoch+1):
         print('\n ### epoch {} ###'.format(epoch))
@@ -121,34 +127,60 @@ def do_training(args,model):
         print('[train] loss: {:.4f} | Elapsed time: {}'.format(
             epoch_loss / num_batches, timedelta(seconds=time.time() - start)))
 
-        ### validation ###
-        start = time.time()
-        res_dict = do_valdation(model=model, loader=val_loader, gt_bboxes_dict=val_gt_dict, transcriptions_dict=val_illegibility_dict, input_size=args.val_input_size)
-        val_dict = res_dict['total']
-        val_dict['epoch'] = epoch
-        wandb.log(val_dict)
-        print('[val] f1 : {:.4f} | precision : {:.4f} | recall : {:.4f} | Elapsed time: {}'.format(
-            val_dict['hmean'],val_dict['precision'],val_dict['recall'], timedelta(seconds=time.time() - start)))
-
         if args.save_interval !=-1 and epoch % args.save_interval == 0:
             if not osp.exists(args.model_dir):
                 os.makedirs(args.model_dir)
             ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
-        
-        if best_score<val_dict['hmean']:
-            best_score = val_dict['hmean']
-            best_epoch = epoch
+
+        ### validation 1###
+        start = time.time()
+        res_dict = do_valdation(model=model, loader=val_loader, gt_bboxes_dict=val_gt_dict, transcriptions_dict=val_illegibility_dict, input_size=args.val_input_size)
+        val_dict = res_dict['total']
+        val_dict['epoch'] = epoch
+        wandb.log(val_dict)
+        print('[val 1] f1 : {:.4f} | precision : {:.4f} | recall : {:.4f} | Elapsed time: {}'.format(
+            val_dict['hmean'],val_dict['precision'],val_dict['recall'], timedelta(seconds=time.time() - start)))
+
+        if best_score_1<val_dict['hmean']:
+            best_score_1 = val_dict['hmean']
+            best_epoch_1 = epoch
             if not osp.exists(args.model_dir):
                 os.makedirs(args.model_dir)
 
-            ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'best.pth')
+            ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'best_1.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
-            with open(osp.join(args.model_dir, args.experiment_name, 'best_result.json'), 'w') as f:
+            with open(osp.join(args.model_dir, args.experiment_name, 'best_result_1.json'), 'w') as f:
                 json.dump(res_dict, f, indent=4)
-            print('@@@ best model&result are saved!! @@@')
-        print('[best] epoch : {} | score : {:.4f}'.format(best_epoch,best_score))
+            print('@@@ best 1 model&result are saved!! @@@')
+        print('[best 1] epoch : {} | score : {:.4f}'.format(best_epoch_1,best_score_1))
+
+        ### validation 2###
+        start = time.time()
+        val_dict = {}
+        res_dict = do_valdation(model=model, loader=val_loader_2, gt_bboxes_dict=val_gt_dict_2, transcriptions_dict=val_illegibility_dict_2, input_size=args.val_input_size)
+        val_dict = res_dict['total']
+        print('[val 2] f1 : {:.4f} | precision : {:.4f} | recall : {:.4f} | Elapsed time: {}'.format(
+            val_dict['hmean'],val_dict['precision'],val_dict['recall'], timedelta(seconds=time.time() - start)))
+        
+        val_dict = {key+"_2":val for key,val in val_dict.items()}
+        val_dict['epoch'] = epoch
+        wandb.log(val_dict)
+
+        if best_score_2<val_dict['hmean_2']:
+            best_score_2 = val_dict['hmean_2']
+            best_epoch_2 = epoch
+            if not osp.exists(args.model_dir):
+                os.makedirs(args.model_dir)
+
+            ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'best_2.pth')
+            torch.save(model.state_dict(), ckpt_fpath)
+
+            with open(osp.join(args.model_dir, args.experiment_name, 'best_result_2.json'), 'w') as f:
+                json.dump(res_dict, f, indent=4)
+            print('@@@ best 2 model&result are saved!! @@@')
+        print('[best 2] epoch : {} | score : {:.4f}'.format(best_epoch_2, best_score_2))
         
 
 def do_warmup(args, model):
