@@ -7,6 +7,9 @@ import torch
 import numpy as np
 import cv2
 import albumentations as A
+from albumentations.augmentations.geometric.resize import LongestMaxSize
+from albumentations.pytorch import ToTensorV2
+
 from torch.utils.data import Dataset
 from shapely.geometry import Polygon
 
@@ -381,5 +384,24 @@ class SceneTextDataset(Dataset):
         image = transform(image=image)['image']
         word_bboxes = np.reshape(vertices, (-1, 4, 2))
         roi_mask = generate_roi_mask(image, vertices, labels)
-
         return image, word_bboxes, roi_mask
+
+
+class ValidationDataset(Dataset):
+    def __init__(self, image_fnames,image_dir, input_size=1024):
+        self.image_fnames = image_fnames
+        self.image_dir = image_dir
+        self.transfrom = A.Compose([LongestMaxSize(input_size), A.PadIfNeeded(min_height=input_size, min_width=input_size,
+                                                  position=A.PadIfNeeded.PositionType.TOP_LEFT),A.Normalize(), ToTensorV2()])
+    def __len__(self):
+        return len(self.image_fnames)
+
+    def __getitem__(self, idx):
+        image_fname = self.image_fnames[idx]
+        image_fpath = osp.join(self.image_dir, image_fname)
+
+        image = cv2.imread(image_fpath)[:, :, ::-1]
+        orig_size = image.shape[:2]
+        if self.transfrom:
+            image = self.transfrom(image=image)['image']
+        return image_fname, image, torch.tensor(orig_size)
