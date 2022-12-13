@@ -381,5 +381,27 @@ class SceneTextDataset(Dataset):
         image = transform(image=image)['image']
         word_bboxes = np.reshape(vertices, (-1, 4, 2))
         roi_mask = generate_roi_mask(image, vertices, labels)
-
         return image, word_bboxes, roi_mask
+
+
+class ValidationDataset(Dataset):
+    def __init__(self, image_fnames,image_dir, input_size=1024,  transfrom=None):
+        self.image_fnames = image_fnames
+        self.image_dir = image_dir
+        self.input_size = input_size
+        self.transfrom = transfrom
+        #self.image_size, self.crop_size = image_size, crop_size
+        #self.color_jitter, self.normalize = color_jitter, normalize
+
+    def __len__(self):
+        return len(self.image_fnames)
+
+    def __getitem__(self, idx):
+        image_fname = self.image_fnames[idx]
+        image_fpath = osp.join(self.image_dir, image_fname)
+
+        image = cv2.imread(image_fpath)[:, :, ::-1]
+        orig_size = image.shape[:2]
+        if self.transfrom:
+            image = self.transfrom(image=image)['image']
+        return image_fname, image, torch.tensor(orig_size)

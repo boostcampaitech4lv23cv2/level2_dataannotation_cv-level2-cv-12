@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument('--device', default='cuda' if cuda.is_available() else 'cpu')
     parser.add_argument('--input_size', type=int, default=1024)
     parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--mode', type=str, default='save_pred')
+    parser.add_argument('--mode', type=str, default='run')
 
 
     args = parser.parse_args()
@@ -44,52 +44,52 @@ def parse_args():
     return args
 
 
-def val_detect(model, images, input_size):
-    prep_fn = A.Compose([
-        LongestMaxSize(input_size), A.PadIfNeeded(min_height=input_size, min_width=input_size,
-                                                  position=A.PadIfNeeded.PositionType.TOP_LEFT),
-        A.Normalize(), ToTensorV2()])
-    device = list(model.parameters())[0].device
+# def val_detect(model, images, input_size):
+#     prep_fn = A.Compose([
+#         LongestMaxSize(input_size), A.PadIfNeeded(min_height=input_size, min_width=input_size,
+#                                                   position=A.PadIfNeeded.PositionType.TOP_LEFT),
+#         A.Normalize(), ToTensorV2()])
+#     device = list(model.parameters())[0].device
 
-    start = time()
+#     start = time()
 
-    batch, orig_sizes = [], []
-    for image in images:
-        orig_sizes.append(image.shape[:2])
-        batch.append(prep_fn(image=image)['image'])
-    batch = torch.stack(batch, dim=0).to(device)
+#     batch, orig_sizes = [], []
+#     for image in images:
+#         orig_sizes.append(image.shape[:2])
+#         batch.append(prep_fn(image=image)['image'])
+#     batch = torch.stack(batch, dim=0).to(device)
 
-    print('0 :', time()-start)
+#     print('0 :', time()-start)
 
-    start = time()
+#     start = time()
 
-    with torch.no_grad():
-        score_maps, geo_maps = model(batch)
-    score_maps, geo_maps = score_maps.cpu().numpy(), geo_maps.cpu().numpy()
+#     with torch.no_grad():
+#         score_maps, geo_maps = model(batch)
+#     score_maps, geo_maps = score_maps.cpu().numpy(), geo_maps.cpu().numpy()
 
-    print('1 :', time()-start)
+#     print('1 :', time()-start)
 
-    start = time()
+#     start = time()
 
-    by_sample_bboxes = []
-    for score_map, geo_map, orig_size in zip(score_maps, geo_maps, orig_sizes):
-        map_margin = int(abs(orig_size[0] - orig_size[1]) * 0.25 * input_size / max(orig_size))
-        if orig_size[0] > orig_size[1]:
-            score_map, geo_map = score_map[:, :, :-map_margin], geo_map[:, :, :-map_margin]
-        else:
-            score_map, geo_map = score_map[:, :-map_margin, :], geo_map[:, :-map_margin, :]
+#     by_sample_bboxes = []
+#     for score_map, geo_map, orig_size in zip(score_maps, geo_maps, orig_sizes):
+#         map_margin = int(abs(orig_size[0] - orig_size[1]) * 0.25 * input_size / max(orig_size))
+#         if orig_size[0] > orig_size[1]:
+#             score_map, geo_map = score_map[:, :, :-map_margin], geo_map[:, :, :-map_margin]
+#         else:
+#             score_map, geo_map = score_map[:, :-map_margin, :], geo_map[:, :-map_margin, :]
 
-        bboxes = get_bboxes(score_map, geo_map)
-        if bboxes is None:
-            bboxes = np.zeros((0, 4, 2), dtype=np.float32)
-        else:
-            bboxes = bboxes[:, :8].reshape(-1, 4, 2)
-            bboxes *= max(orig_size) / input_size
+#         bboxes = get_bboxes(score_map, geo_map)
+#         if bboxes is None:
+#             bboxes = np.zeros((0, 4, 2), dtype=np.float32)
+#         else:
+#             bboxes = bboxes[:, :8].reshape(-1, 4, 2)
+#             bboxes *= max(orig_size) / input_size
 
-        by_sample_bboxes.append(bboxes)
+#         by_sample_bboxes.append(bboxes)
 
-    print('2 :', time()-start)
-    return by_sample_bboxes
+#     print('2 :', time()-start)
+#     return by_sample_bboxes
 
 
 def save_prediction(model, ckpt_fpath, root_dir, input_size, batch_size, split='train', output_fname = 'valid_pred.csv'):
@@ -126,37 +126,42 @@ def save_prediction(model, ckpt_fpath, root_dir, input_size, batch_size, split='
         json.dump(result, f, indent=4)
 
 
-def do_valdation(model, gt_bboxes_dict,transcriptions_dict, image_dir, input_size, batch_size, output_fname=None):
+def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, image_dir, input_size, batch_size, output_fname=None):
     model.eval()
     image_fnames, by_sample_bboxes = [], []
 
-    images = []
-    for image_fname in tqdm(gt_bboxes_dict.keys()):
-        image_fpath = osp.join(image_dir, image_fname)
-        image_fnames.append(image_fname)
+    for fnames, images, orig_sizes in tqdm(loader):
+        images = images.cuda()
+        orig_sizes = orig_sizes.numpy()
+        image_fnames.extend(fnames)
 
-        images.append(cv2.imread(image_fpath)[:, :, ::-1])
-        if len(images) == batch_size:
-            by_sample_bboxes.extend(detect(model, images, input_size))
-            images = []
-            
-    if len(images):
-        by_sample_bboxes.extend(detect(model, images, input_size))
+        with torch.no_grad():
+            score_maps, geo_maps = model(images)
+        score_maps, geo_maps = score_maps.cpu().numpy(), geo_maps.cpu().numpy()
 
-    # for image_fname, image, orig_size in loader:
-    #     print(type(image_fname),type(image),type(orig_size))
-    #     print(image_fname.shape)
-    #     print(image.shape)
-    #     print(orig_size.shape)
-    #     break
+        for score_map, geo_map, orig_size in zip(score_maps, geo_maps, orig_sizes):
+            map_margin = int(abs(orig_size[0] - orig_size[1]) * 0.25 * input_size / max(orig_size))
+            if orig_size[0] > orig_size[1]:
+                score_map, geo_map = score_map[:, :, :-map_margin], geo_map[:, :, :-map_margin]
+            else:
+                score_map, geo_map = score_map[:, :-map_margin, :], geo_map[:, :-map_margin, :]
+
+            bboxes = get_bboxes(score_map, geo_map)
+            if bboxes is None:
+                bboxes = np.zeros((0, 4, 2), dtype=np.float32)
+            else:
+                bboxes = bboxes[:, :8].reshape(-1, 4, 2)
+                bboxes *= max(orig_size) / input_size
+
+            by_sample_bboxes.append(bboxes)
 
     pred_bboxes_dict = dict(zip(image_fnames, by_sample_bboxes))
     resDict = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict,transcriptions_dict)
 
-    if output_fname is not None:
+    if output_fname is not None: # for validation once
         with open(output_fname, 'w') as f:
             json.dump(resDict, f, indent=4)
-
+        print("@@@ saved at {} @@@".format(output_fname))
     return resDict
 
 
@@ -177,18 +182,18 @@ def main(args):
         with open(osp.join(root_dir, 'ufo/{}.json'.format('annotation')), 'r') as f:
             gt_bboxes_dict = json.load(f)['images']
         val_image_dir = osp.join(root_dir,'images')
+        val_transform = A.Compose([LongestMaxSize(args.input_size), A.PadIfNeeded(min_height=args.input_size, min_width=args.input_size,
+                                                  position=A.PadIfNeeded.PositionType.TOP_LEFT),A.Normalize(), ToTensorV2()])
 
         transcriptions_dict = {}
         for image_fname in gt_bboxes_dict:
             #transcriptions_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['transcription'] for i in gt_bboxes_dict[image_fname]['words']]
             transcriptions_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['illegibility'] for i in gt_bboxes_dict[image_fname]['words']]
             gt_bboxes_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['points'] for i in gt_bboxes_dict[image_fname]['words']]
-
-        # val_dataset = ValidationDataset(image_fnames=list(gt_bboxes_dict.keys()),image_dir=val_image_dir,input_size=args.input_size)
-        # val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-
-        resDict = do_valdation(model=model,gt_bboxes_dict=gt_bboxes_dict, transcriptions_dict=transcriptions_dict, image_dir=val_image_dir, input_size=args.input_size,
-                                batch_size=args.batch_size)
+        val_dataset = ValidationDataset(image_fnames=list(gt_bboxes_dict.keys()),image_dir=val_image_dir,input_size=args.input_size,transfrom=val_transform)
+        val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+        resDict = do_valdation(model=model,loader=val_loader, gt_bboxes_dict=gt_bboxes_dict, transcriptions_dict=transcriptions_dict, image_dir=val_image_dir, input_size=args.input_size,
+                               batch_size=args.batch_size, output_fname="trained_models/dataset_val(ill).json")
         print(resDict['total'])
     
     # transcriptions_dict = {}
