@@ -14,7 +14,7 @@ st.set_page_config(page_title="annotation", layout="wide")
 
 ## ex) streamlit run app.py --server.port=30001 -- --submission_csv <path> --gt_json <path> --dataset_path <path>
 parser = argparse.ArgumentParser(description='basic Argparse')
-parser.add_argument('--valid_json', type=str, default='/opt/ml/valid_result_5.json', help='Infered된 json 파일의 경로 ex)~/submission.json')
+parser.add_argument('--valid_json', type=str, default='/opt/ml/dataset_val(ill).json', help='Infered된 json 파일의 경로 ex)~/submission.json')
 parser.add_argument('--gt_json', type=str, default='/opt/ml/input/data/dataset/ufo/annotation.json', help='Ground Truth 데이터의 json 파일 경로 ex)/opt/ml/dataset/train.json')
 parser.add_argument('--dataset_path', type=str, default='/opt/ml/input/data/dataset/images', help='데이터셋 폴더 경로 ex)/opt/ml/dataset/')
 args = parser.parse_args()
@@ -154,5 +154,18 @@ def main():
     st.header(img_filename)
     st.text('Ground Truth')
     st.image(img)
+    data = []
+    indices = []
+    for k, v in gt_words.items():
+        if v['illegibility']:
+            continue
+        indices.append(k)
+        data.append({
+            'transcription' : v['transcription'],
+            'language' : ", ".join(v['language']) if v['language'] is not None else None,
+            'orientation': v['orientation'],
+            'word_tags': ", ".join(v['tags'])})
+    df = pd.DataFrame(data, index=indices)
+    st.table(df)
 
 main()
