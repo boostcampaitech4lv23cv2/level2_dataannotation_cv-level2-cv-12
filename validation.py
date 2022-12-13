@@ -126,8 +126,6 @@ def save_prediction(model, ckpt_fpath, root_dir, input_size, batch_size, split='
         json.dump(result, f, indent=4)
 
 
-
-
 def do_valdation(model, gt_bboxes_dict,transcriptions_dict, image_dir, input_size, batch_size, output_fname=None):
     model.eval()
     image_fnames, by_sample_bboxes = [], []
@@ -141,7 +139,7 @@ def do_valdation(model, gt_bboxes_dict,transcriptions_dict, image_dir, input_siz
         if len(images) == batch_size:
             by_sample_bboxes.extend(detect(model, images, input_size))
             images = []
-
+            
     if len(images):
         by_sample_bboxes.extend(detect(model, images, input_size))
 

@@ -5,6 +5,7 @@ import math
 from datetime import timedelta
 from argparse import ArgumentParser
 from collections import defaultdict
+import json
 
 import torch
 from torch import cuda
@@ -17,14 +18,17 @@ from east_dataset import EASTDataset
 from dataset import SceneTextDataset
 from model import EAST
 from utils.seed import set_seed
+from validation import do_valdation
 from logger.set_wandb import wandb_init
 
 def parse_args():
     parser = ArgumentParser()
 
     # Conventional args
-    parser.add_argument('--data_dir', type=str,
+    parser.add_argument('--train_dir', type=str,
                         default=os.environ.get('SM_CHANNEL_TRAIN', '../input/data/ICDAR17_Korean'))
+    parser.add_argument('--val_dir', type=str,
+                        default='../input/data/dataset')
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR',
                                                                         'trained_models'))
 
@@ -53,22 +57,34 @@ def parse_args():
 
 
 def do_training(args,model):
-    print("\n### TRAINING ###")
-    dataset = SceneTextDataset(args.data_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
+    print("\n##### TRAINING #####")
+    dataset = SceneTextDataset(args.train_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
+    with open(osp.join(args.val_dir, 'ufo/{}.json'.format('annotation')), 'r') as f:
+        val_gt_dict = json.load(f)['images']
+    val_image_dir = osp.join(args.val_dir,'images')
+
+    val_illegibility_dict = {}
+    for image_fname in val_gt_dict:
+        val_illegibility_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['illegibility'] for i in val_gt_dict[image_fname]['words']]
+        val_gt_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['points'] for i in val_gt_dict[image_fname]['words']]
+
+
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
+    best_score, best_epoch  = 0, 0
 
-    model.train()
     for epoch in range(args.max_epoch):
-        epoch_loss, epoch_start = 0, time.time()
+        print('### epoch {} ###'.format(epoch))
+        epoch_loss, start = 0, time.time()
         train_dict = defaultdict(int)
+        model.train()
         with tqdm(total=num_batches) as pbar:
             for img, gt_score_map, gt_geo_map, roi_mask in train_loader:
-                pbar.set_description('[Epoch {}]'.format(epoch + 1))
+                #pbar.set_description('[Epoch {}]'.format(epoch + 1))
 
                 loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
                 optimizer.zero_grad()
@@ -95,17 +111,38 @@ def do_training(args,model):
         train_dict['learning_rate'] = optimizer.param_groups[0]['lr']
         wandb.log(train_dict)
 
-        print('Mean loss: {:.4f} | Elapsed time: {}'.format(
-            epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
+        print('[train] loss: {:.4f} | Elapsed time: {}'.format(
+            epoch_loss / num_batches, timedelta(seconds=time.time() - start)))
+
+        
+        ### validation ###
+        tart = time.time()
+        val_dict = do_valdation(model=model,gt_bboxes_dict=val_gt_dict, transcriptions_dict=val_illegibility_dict, image_dir=val_image_dir, input_size=1024,batch_size=16)['total']
+        val_dict['epoch'] = epoch
+        wandb.log(val_dict)
+
+        print('[val] f1 : {:.4f} | precision : {:.4f} | recall : {:.4f} | Elapsed time: {}'.format(
+            val_dict['hmean'],val_dict['precision'],val_dict['recall'], timedelta(seconds=time.time() - start)))
 
         if (epoch + 1) % args.save_interval == 0:
             if not osp.exists(args.model_dir):
                 os.makedirs(args.model_dir)
             ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'latest.pth')
             torch.save(model.state_dict(), ckpt_fpath)
+        
+        if best_score<val_dict['hmean']:
+            best_score = val_dict['hmean']
+            best_epoch = epoch
+            if not osp.exists(args.model_dir):
+                os.makedirs(args.model_dir)
+            ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'best.pth')
+            torch.save(model.state_dict(), ckpt_fpath)
+            print('@@@ latest model is saved!! @@@')
+        print('[best] epoch : {} | score : {:.4f}'.format(best_epoch,best_score))
+        
 
 def do_warmup(args, model):
-    dataset = SceneTextDataset(args.data_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
+    dataset = SceneTextDataset(args.train_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
@@ -113,7 +150,7 @@ def do_warmup(args, model):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
     model.train()
-    print("\n### WARMING UP ###")
+    print("\n##### WARMING UP #####")
     for name, param in model.named_parameters():
         if 'extractor' in name:
             param.requires_grad = False
