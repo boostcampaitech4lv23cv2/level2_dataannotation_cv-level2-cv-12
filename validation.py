@@ -172,7 +172,6 @@ def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, 
         print("@@@ saved at {} @@@".format(output_fname))
     return resDict
 
-
 def main(args):
     # Initialize model
     import os.path as osp

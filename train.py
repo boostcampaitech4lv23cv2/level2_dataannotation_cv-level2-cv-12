@@ -66,7 +66,7 @@ def do_training(args,model):
     dataset = SceneTextDataset(args.train_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / args.batch_size)
-    train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     with open(osp.join(args.val_dir, 'ufo/{}.json'.format('annotation')), 'r') as f:
         val_gt_dict = json.load(f)['images']
@@ -78,7 +78,7 @@ def do_training(args,model):
         val_gt_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['points'] for i in val_gt_dict[image_fname]['words']]
 
     val_dataset = ValidationDataset(image_fnames=list(val_gt_dict.keys()),image_dir=val_image_dir,input_size=args.val_input_size)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=args.num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=args.num_workers)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
