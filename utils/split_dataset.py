@@ -6,14 +6,14 @@ from sklearn.model_selection import StratifiedGroupKFold
 from seed import set_seed
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-a', '--annotation-path', default='/opt/ml/input/data/ICDAR17_Korean/kfold/annotations.json', help='input annotation json path')
-parser.add_argument('-i', '--input-path', default='/opt/ml/input/data/ICDAR17_Korean/ufo/train.json', help='input train json path')
-parser.add_argument('-o', '--output-path', default='/opt/ml/input/data/ICDAR17_Korean/kfold', help='output dir path')
+parser.add_argument('-a', '--annotation-path', default='/opt/ml/input/data/total_data/kfold/annotations.json', help='input annotation json path')
+parser.add_argument('-i', '--input-path', default='/opt/ml/input/data/total_data/ufo/train.json', help='input train json path')
+parser.add_argument('-o', '--output-path', default='/opt/ml/input/data/total_data/kfold', help='output dir path')
 parser.add_argument('-v', '--val-ratio', default=0.2, help='validation split ratio')
 parser.add_argument('-s', '--seed', default=42, help='random seed')
 args = parser.parse_args()
     
-def stratified_group_kfold_dataset(args):    
+def split_stratified_group_kfold(args):    
     with open(args.annotation_path, 'r', encoding='utf-8') as f:
         annotations = json.load(f)
     
@@ -21,9 +21,15 @@ def stratified_group_kfold_dataset(args):
         data = json.load(f)['images']
 
     X = np.ones((len(annotations), 1))
-    y = np.array([0 if info['language'] == "ko" else 1 for info in annotations])
+    
+    orientations = []
+    for annotation in annotations:
+        if annotation['orientation'] not in orientations:
+            orientations.append(annotation['orientation'])
+    
+    y = np.array([orientations.index(info['orientation']) for info in annotations])
     groups = np.array([info['file_name'] for info in annotations])
-
+    
     cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
 
     for idx, (train_ids, val_ids) in enumerate(cv.split(X, y, groups)):
@@ -61,4 +67,4 @@ def stratified_group_kfold_dataset(args):
 
 if __name__ == "__main__":
     set_seed(args.seed)    
-    stratified_group_kfold_dataset(args)
+    split_stratified_group_kfold(args)
