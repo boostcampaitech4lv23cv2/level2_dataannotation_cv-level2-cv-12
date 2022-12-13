@@ -7,6 +7,9 @@ import torch
 import numpy as np
 import cv2
 import albumentations as A
+from albumentations.augmentations.geometric.resize import LongestMaxSize
+from albumentations.pytorch import ToTensorV2
+
 from torch.utils.data import Dataset
 from shapely.geometry import Polygon
 
@@ -385,14 +388,11 @@ class SceneTextDataset(Dataset):
 
 
 class ValidationDataset(Dataset):
-    def __init__(self, image_fnames,image_dir, input_size=1024,  transfrom=None):
+    def __init__(self, image_fnames,image_dir, input_size=1024):
         self.image_fnames = image_fnames
         self.image_dir = image_dir
-        self.input_size = input_size
-        self.transfrom = transfrom
-        #self.image_size, self.crop_size = image_size, crop_size
-        #self.color_jitter, self.normalize = color_jitter, normalize
-
+        self.transfrom = A.Compose([LongestMaxSize(input_size), A.PadIfNeeded(min_height=input_size, min_width=input_size,
+                                                  position=A.PadIfNeeded.PositionType.TOP_LEFT),A.Normalize(), ToTensorV2()])
     def __len__(self):
         return len(self.image_fnames)
 

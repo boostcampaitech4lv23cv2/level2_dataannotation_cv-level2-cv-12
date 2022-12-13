@@ -15,11 +15,15 @@ from tqdm import tqdm
 import wandb
 
 from east_dataset import EASTDataset
-from dataset import SceneTextDataset
+from dataset import SceneTextDataset, ValidationDataset
 from model import EAST
 from utils.seed import set_seed
 from validation import do_valdation
 from logger.set_wandb import wandb_init
+
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+from albumentations.augmentations.geometric.resize import LongestMaxSize
 
 def parse_args():
     parser = ArgumentParser()
@@ -37,6 +41,8 @@ def parse_args():
 
     parser.add_argument('--image_size', type=int, default=1024)
     parser.add_argument('--input_size', type=int, default=512)
+    parser.add_argument('--val_input_size', type=int, default=1024)
+
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_epoch', type=int, default=200)
@@ -55,13 +61,12 @@ def parse_args():
 
     return args
 
-
 def do_training(args,model):
     print("\n##### TRAINING #####")
     dataset = SceneTextDataset(args.train_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / args.batch_size)
-    train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
     with open(osp.join(args.val_dir, 'ufo/{}.json'.format('annotation')), 'r') as f:
         val_gt_dict = json.load(f)['images']
@@ -72,13 +77,15 @@ def do_training(args,model):
         val_illegibility_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['illegibility'] for i in val_gt_dict[image_fname]['words']]
         val_gt_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['points'] for i in val_gt_dict[image_fname]['words']]
 
+    val_dataset = ValidationDataset(image_fnames=list(val_gt_dict.keys()),image_dir=val_image_dir,input_size=args.val_input_size)
+    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=args.num_workers)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
     best_score, best_epoch  = 0, 0
 
-    for epoch in range(args.max_epoch):
-        print('### epoch {} ###'.format(epoch))
+    for epoch in range(1,args.max_epoch+1):
+        print('\n ### epoch {} ###'.format(epoch))
         epoch_loss, start = 0, time.time()
         train_dict = defaultdict(int)
         model.train()
@@ -105,6 +112,7 @@ def do_training(args,model):
                 train_dict['train_cls_loss'] += extra_info['cls_loss'] / len(train_loader)
                 train_dict['train_angle_loss'] += extra_info['angle_loss'] / len(train_loader)
                 train_dict['train_iou_loss'] += extra_info['iou_loss'] / len(train_loader)
+                break
 
         scheduler.step()
         train_dict['epoch'] = epoch
@@ -114,17 +122,16 @@ def do_training(args,model):
         print('[train] loss: {:.4f} | Elapsed time: {}'.format(
             epoch_loss / num_batches, timedelta(seconds=time.time() - start)))
 
-        
         ### validation ###
-        tart = time.time()
-        val_dict = do_valdation(model=model,gt_bboxes_dict=val_gt_dict, transcriptions_dict=val_illegibility_dict, image_dir=val_image_dir, input_size=1024,batch_size=16)['total']
+        start = time.time()
+        res_dict = do_valdation(model=model, loader=val_loader, gt_bboxes_dict=val_gt_dict, transcriptions_dict=val_illegibility_dict, input_size=args.val_input_size)
+        val_dict = res_dict['total']
         val_dict['epoch'] = epoch
         wandb.log(val_dict)
-
         print('[val] f1 : {:.4f} | precision : {:.4f} | recall : {:.4f} | Elapsed time: {}'.format(
             val_dict['hmean'],val_dict['precision'],val_dict['recall'], timedelta(seconds=time.time() - start)))
 
-        if (epoch + 1) % args.save_interval == 0:
+        if args.save_interval !=-1 and epoch % args.save_interval == 0:
             if not osp.exists(args.model_dir):
                 os.makedirs(args.model_dir)
             ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'latest.pth')
@@ -135,9 +142,13 @@ def do_training(args,model):
             best_epoch = epoch
             if not osp.exists(args.model_dir):
                 os.makedirs(args.model_dir)
+
             ckpt_fpath = osp.join(args.model_dir, args.experiment_name, 'best.pth')
             torch.save(model.state_dict(), ckpt_fpath)
-            print('@@@ latest model is saved!! @@@')
+
+            with open(osp.join(args.model_dir, args.experiment_name, 'best_result.json'), 'w') as f:
+                json.dump(res_dict, f, indent=4)
+            print('@@@ best model&result are saved!! @@@')
         print('[best] epoch : {} | score : {:.4f}'.format(best_epoch,best_score))
         
 

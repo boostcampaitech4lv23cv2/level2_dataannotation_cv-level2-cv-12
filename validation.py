@@ -126,18 +126,24 @@ def save_prediction(model, ckpt_fpath, root_dir, input_size, batch_size, split='
         json.dump(result, f, indent=4)
 
 
-def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, image_dir, input_size, batch_size, output_fname=None):
+def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, output_fname=None):
     model.eval()
     image_fnames, by_sample_bboxes = [], []
+
+    start = time()
 
     for fnames, images, orig_sizes in tqdm(loader):
         images = images.cuda()
         orig_sizes = orig_sizes.numpy()
         image_fnames.extend(fnames)
 
+        #start = time()
         with torch.no_grad():
             score_maps, geo_maps = model(images)
         score_maps, geo_maps = score_maps.cpu().numpy(), geo_maps.cpu().numpy()
+
+        #print("0 :", time()-start)
+        #start = time()
 
         for score_map, geo_map, orig_size in zip(score_maps, geo_maps, orig_sizes):
             map_margin = int(abs(orig_size[0] - orig_size[1]) * 0.25 * input_size / max(orig_size))
@@ -154,6 +160,8 @@ def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, image_dir, i
                 bboxes *= max(orig_size) / input_size
 
             by_sample_bboxes.append(bboxes)
+        
+        #print("1 :", time()-start)
 
     pred_bboxes_dict = dict(zip(image_fnames, by_sample_bboxes))
     resDict = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict,transcriptions_dict)
@@ -176,24 +184,22 @@ def main(args):
         save_prediction(model=model, ckpt_fpath=ckpt_fpath, root_dir='../input/data/total_data',input_size=args.input_size,
                                 batch_size=args.batch_size, split='train', output_fname = 'valid_text.csv')
     elif args.mode == 'run':
+        #output_fname = "trained_models/dataset_val(ill).json"
+        output_fname = None
         ckpt_fpath = 'trained_models/baseline/latest.pth'
         model.load_state_dict(torch.load(ckpt_fpath))
         root_dir = '../input/data/dataset'
         with open(osp.join(root_dir, 'ufo/{}.json'.format('annotation')), 'r') as f:
             gt_bboxes_dict = json.load(f)['images']
         val_image_dir = osp.join(root_dir,'images')
-        val_transform = A.Compose([LongestMaxSize(args.input_size), A.PadIfNeeded(min_height=args.input_size, min_width=args.input_size,
-                                                  position=A.PadIfNeeded.PositionType.TOP_LEFT),A.Normalize(), ToTensorV2()])
-
         transcriptions_dict = {}
         for image_fname in gt_bboxes_dict:
             #transcriptions_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['transcription'] for i in gt_bboxes_dict[image_fname]['words']]
             transcriptions_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['illegibility'] for i in gt_bboxes_dict[image_fname]['words']]
             gt_bboxes_dict[image_fname] = [gt_bboxes_dict[image_fname]['words'][i]['points'] for i in gt_bboxes_dict[image_fname]['words']]
-        val_dataset = ValidationDataset(image_fnames=list(gt_bboxes_dict.keys()),image_dir=val_image_dir,input_size=args.input_size,transfrom=val_transform)
+        val_dataset = ValidationDataset(image_fnames=list(gt_bboxes_dict.keys()),image_dir=val_image_dir,input_size=args.input_size)
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-        resDict = do_valdation(model=model,loader=val_loader, gt_bboxes_dict=gt_bboxes_dict, transcriptions_dict=transcriptions_dict, image_dir=val_image_dir, input_size=args.input_size,
-                               batch_size=args.batch_size, output_fname="trained_models/dataset_val(ill).json")
+        resDict = do_valdation(model=model,loader=val_loader, gt_bboxes_dict=gt_bboxes_dict, transcriptions_dict=transcriptions_dict,input_size=args.input_size, output_fname=output_fname)
         print(resDict['total'])
     
     # transcriptions_dict = {}
