@@ -3,8 +3,8 @@ import argparse
 import os
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', '--input-path', default='/opt/ml/input/data/total_data/ufo/train.json', help='input train json path')
-parser.add_argument('-o', '--output-path', default='/opt/ml/input/data/total_data/kfold', help='output dir path')
+parser.add_argument('-i', '--input-path', default='/opt/ml/input/data/Boostcamp/ufo/annotation.json', help='input train json path')
+parser.add_argument('-o', '--output-path', default='/opt/ml/input/data/Boostcamp/kfold', help='output dir path')
 args = parser.parse_args()
 
 def split_annotation(args):

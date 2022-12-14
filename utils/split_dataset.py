@@ -6,9 +6,9 @@ from sklearn.model_selection import StratifiedGroupKFold
 from seed import set_seed
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-a', '--annotation-path', default='/opt/ml/input/data/total_data/kfold/annotations.json', help='input annotation json path')
-parser.add_argument('-i', '--input-path', default='/opt/ml/input/data/total_data/ufo/train.json', help='input train json path')
-parser.add_argument('-o', '--output-path', default='/opt/ml/input/data/total_data/kfold', help='output dir path')
+parser.add_argument('-a', '--annotation-path', default='/opt/ml/input/data/Boostcamp/kfold/annotations.json', help='input annotation json path')
+parser.add_argument('-i', '--input-path', default='/opt/ml/input/data/Boostcamp/ufo/annotation.json', help='input train json path')
+parser.add_argument('-o', '--output-path', default='/opt/ml/input/data/Boostcamp/kfold', help='output dir path')
 parser.add_argument('-v', '--val-ratio', default=0.2, help='validation split ratio')
 parser.add_argument('-s', '--seed', default=42, help='random seed')
 args = parser.parse_args()

@@ -9,10 +9,10 @@ def check_fold_info(orientation_info : dict, split_num : int):
     train_infos, val_infos = [], []
     
     for i in range(split_num):
-        with open(f'/opt/ml/input/data/total_data/kfold/seed42/train_{i}.json', 'r', encoding='utf-8') as file:
+        with open(f'/opt/ml/input/data/Boostcamp/kfold/seed42/train_{i}.json', 'r', encoding='utf-8') as file:
             trains = json.load(file)['images']
             
-        with open(f'/opt/ml/input/data/total_data/kfold/seed42/val_{i}.json', 'r', encoding='utf-8') as file:
+        with open(f'/opt/ml/input/data/Boostcamp/kfold/seed42/val_{i}.json', 'r', encoding='utf-8') as file:
             vals = json.load(file)['images']
         
         train_info = defaultdict(int)
@@ -43,7 +43,7 @@ def check_fold_info(orientation_info : dict, split_num : int):
     print(df)
     
 def check_raw_info():
-    with open('../../input/data/total_data/ufo/train.json', 'r', encoding='utf-8') as file:
+    with open('../../input/data/Boostcamp/ufo/annotation.json', 'r', encoding='utf-8') as file:
         data = json.load(file)['images']
 
     orientation_info = defaultdict(int)

@@ -34,8 +34,12 @@ def parse_args():
     # Conventional args
     parser.add_argument('--train_dir', type=str,
                         default=os.environ.get('SM_CHANNEL_TRAIN', '../input/data/ICDAR17_Korean'))
+    parser.add_argument('--train_name', type=str,
+                        default='val_3')
     parser.add_argument('--val_dir', type=str,
                         default='../input/data/dataset')
+    parser.add_argument('--val_name', type=str,
+                        default='val_3')
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR',
                                                                         'trained_models'))
 
@@ -66,12 +70,12 @@ def parse_args():
 
 def do_training(args,model,process_cnt,process_pool):
     print("\n##### TRAINING #####")
-    dataset = SceneTextDataset(args.train_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
+    dataset = SceneTextDataset(args.train_dir, split=args.train_name, image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    with open(osp.join(args.val_dir, 'ufo/{}.json'.format('annotation')), 'r') as f:
+    with open(osp.join(args.val_dir, 'ufo/{}.json'.format(args.val_name)), 'r') as f:
         val_gt_dict = json.load(f)['images']
     val_image_dir = osp.join(args.val_dir,'images')
 
