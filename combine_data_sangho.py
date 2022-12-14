@@ -47,8 +47,13 @@ def main(args):
             json_data = json.load(f)
         print(f'file number {json_cnt} images :', len(json_data['images']))
         for k in list(json_data['images'].keys()):
-            if random.random() 
-            read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
+            if ratio == 1.:
+                read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
+            elif random.random() <= ratio:
+                read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
+            else:
+                continue
+            
     print('total images :', len(read_json['images']))
     print()
 

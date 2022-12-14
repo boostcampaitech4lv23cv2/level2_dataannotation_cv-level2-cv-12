@@ -35,9 +35,9 @@ def parse_args():
     parser.add_argument('--train_dir', type=str,
                         default=os.environ.get('SM_CHANNEL_TRAIN', '../input/data/ICDAR17_Korean'))
     parser.add_argument('--train_name', type=str, default='val_3')
-    parser.add_argument('--val_dir', type=str,
-                        default='../input/data/dataset')
-    parser.add_argument('--val_name', type=str, default='val_3')
+    #parser.add_argument('--val_dir', type=str,
+    #                    default='../input/data/dataset')
+    #parser.add_argument('--val_name', type=str, default='val_3')
     parser.add_argument('--model_dir', type=str, default=os.environ.get('SM_MODEL_DIR',
                                                                         'trained_models'))
 
@@ -46,9 +46,9 @@ def parse_args():
 
     parser.add_argument('--image_size', type=int, default=1024)
     parser.add_argument('--input_size', type=int, default=512)
-    parser.add_argument('--val_input_size', type=int, default=1024)
+    #parser.add_argument('--val_input_size', type=int, default=1024)
 
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_epoch', type=int, default=200)
     parser.add_argument('--save_interval', type=int, default=5)
@@ -73,17 +73,17 @@ def do_training(args,model,process_cnt,process_pool):
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    with open(osp.join(args.val_dir, 'ufo/{}.json'.format(args.val_name)), 'r') as f:
-        val_gt_dict = json.load(f)['images']
-    val_image_dir = osp.join(args.val_dir,'images')
+    #with open(osp.join(args.val_dir, 'ufo/{}.json'.format(args.val_name)), 'r') as f:
+    #    val_gt_dict = json.load(f)['images']
+    #val_image_dir = osp.join(args.val_dir,'images')
 
-    val_illegibility_dict = {}
-    for image_fname in val_gt_dict:
-        val_illegibility_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['illegibility'] for i in val_gt_dict[image_fname]['words']]
-        val_gt_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['points'] for i in val_gt_dict[image_fname]['words']]
+    #val_illegibility_dict = {}
+    #for image_fname in val_gt_dict:
+    #    val_illegibility_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['illegibility'] for i in val_gt_dict[image_fname]['words']]
+    #    val_gt_dict[image_fname] = [val_gt_dict[image_fname]['words'][i]['points'] for i in val_gt_dict[image_fname]['words']]
 
-    val_dataset = ValidationDataset(image_fnames=list(val_gt_dict.keys()),image_dir=val_image_dir,input_size=args.val_input_size)
-    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=args.num_workers)
+    #val_dataset = ValidationDataset(image_fnames=list(val_gt_dict.keys()),image_dir=val_image_dir,input_size=args.val_input_size)
+    #val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=args.num_workers)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
@@ -126,6 +126,15 @@ def do_training(args,model,process_cnt,process_pool):
         print('[train] loss: {:.4f} | Elapsed time: {}'.format(
             epoch_loss / num_batches, timedelta(seconds=time.time() - start)))
 
+        if (epoch + 1) % args.save_interval == 0:
+            if not osp.exists(args.model_dir):
+                os.makedirs(args.model_dir)
+
+            ckpt_fpath = osp.join(args.model_dir, 'latest.pth')
+            torch.save(model.state_dict(), ckpt_fpath)
+
+
+        """
         ### validation ###
         start = time.time()
         res_dict = do_valdation(model=model, loader=val_loader, gt_bboxes_dict=val_gt_dict, transcriptions_dict=val_illegibility_dict, input_size=args.val_input_size, process_cnt=process_cnt, process_pool=process_pool)
@@ -154,10 +163,10 @@ def do_training(args,model,process_cnt,process_pool):
                 json.dump(res_dict, f, indent=4)
             print('@@@ best model&result are saved!! @@@')
         print('[best] epoch : {} | score : {:.4f}'.format(best_epoch,best_score))
-        
+        """
 
 def do_warmup(args, model):
-    dataset = SceneTextDataset(args.train_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
+    dataset = SceneTextDataset(args.train_dir, split=args.train_name, image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
@@ -216,8 +225,8 @@ def main(args):
     model = EAST()
     model.to(args.device)
 
-    if args.warmup:
-        do_warmup(args, model)
+    #if args.warmup:
+    do_warmup(args, model)
     do_training(args, model, process_cnt, process_pool)
 
 
