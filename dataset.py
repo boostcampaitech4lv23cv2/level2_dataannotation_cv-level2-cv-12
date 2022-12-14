@@ -309,6 +309,24 @@ def rotate_img(img, vertices, angle_range=10):
         new_vertices[i,:] = rotate_vertices(vertice, -angle / 180 * math.pi, np.array([[center_x],[center_y]]))
     return img, new_vertices
 
+def rotate_img90(img, vertices):
+    '''rotate image [-10, 10] degree to aug data
+    Input:
+        img         : PIL Image
+        vertices    : vertices of text regions <numpy.ndarray, (n,8)>
+        angle_range : rotate range
+    Output:
+        img         : rotated PIL Image
+        new_vertices: rotated vertices
+    '''
+    center_x = (img.width - 1) / 2
+    center_y = (img.height - 1) / 2
+    angle = 90 * (np.random.randint(-2, 2))
+    img = img.rotate(angle, Image.BILINEAR)
+    new_vertices = np.zeros(vertices.shape)
+    for i, vertice in enumerate(vertices):
+        new_vertices[i,:] = rotate_vertices(vertice, -angle / 180 * math.pi, np.array([[center_x],[center_y]]))
+    return img, new_vertices
 
 def generate_roi_mask(image, vertices, labels):
     mask = np.ones(image.shape[:2], dtype=np.float32)
@@ -368,6 +386,7 @@ class SceneTextDataset(Dataset):
         image, vertices = resize_img(image, vertices, self.image_size)
         image, vertices = adjust_height(image, vertices)
         image, vertices = rotate_img(image, vertices)
+        # image, vertices = rotate_img90(image, vertices)
         image, vertices = crop_img(image, vertices, labels, self.crop_size)
 
         if image.mode != 'RGB':
@@ -379,6 +398,11 @@ class SceneTextDataset(Dataset):
             funcs.append(A.ColorJitter(0.5, 0.5, 0.5, 0.25))
         if self.normalize:
             funcs.append(A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
+        # funcs.append(A.GaussianBlur())
+        # funcs.append(A.VerticalFlip())
+        # funcs.append(A.HorizontalFlip())
+        # funcs.append(A.RandomRotate90())
+        # funcs.append(A.RandomRot)
         transform = A.Compose(funcs)
 
         image = transform(image=image)['image']
