@@ -126,7 +126,7 @@ def save_prediction(model, ckpt_fpath, root_dir, input_size, batch_size, split='
         json.dump(result, f, indent=4)
 
 
-def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, output_fname=None):
+def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, process_cnt, process_pool, output_fname=None):
     model.eval()
     image_fnames, by_sample_bboxes = [], []
 
@@ -164,7 +164,33 @@ def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, 
         #print("1 :", time()-start)
 
     pred_bboxes_dict = dict(zip(image_fnames, by_sample_bboxes))
-    resDict = calc_deteval_metrics(pred_bboxes_dict, gt_bboxes_dict,transcriptions_dict)
+    
+    pred_bboxes_dicts, gt_bboxes_dicts, transcriptions_dicts = [], [], []   
+    split_length = len(pred_bboxes_dict)//process_cnt
+    
+    for i in range(process_cnt):
+        if i == process_cnt - 1:
+            pred_bboxes_dicts.append(dict(list(pred_bboxes_dict.items())[split_length*i:]))
+            gt_bboxes_dicts.append(dict(list(gt_bboxes_dict.items())[split_length*i:]))
+            transcriptions_dicts.append(dict(list(transcriptions_dict.items())[split_length*i:]))
+        else:
+            pred_bboxes_dicts.append(dict(list(pred_bboxes_dict.items())[split_length*i:split_length*(i+1)]))
+            gt_bboxes_dicts.append(dict(list(gt_bboxes_dict.items())[split_length*i:split_length*(i+1)]))
+            transcriptions_dicts.append(dict(list(transcriptions_dict.items())[split_length*i:split_length*(i+1)]))
+    
+    datas = []
+    for p, g, t in zip(pred_bboxes_dicts, gt_bboxes_dicts, transcriptions_dicts):
+        datas.append([p, g, t])
+        
+    ret = process_pool.starmap_async(calc_deteval_metrics, datas)
+    results = ret.get()
+    resDict = results[0]
+    
+    for result in results[1:]:
+        resDict = dict(resDict, **result)
+
+    process_pool.close()
+    process_pool.join()
 
     if output_fname is not None: # for validation once
         with open(output_fname, 'w') as f:
