@@ -18,6 +18,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from albumentations.augmentations.geometric.resize import LongestMaxSize
 from detect import *
+from multiprocessing import Pool
 
 CHECKPOINT_EXTENSIONS = ['.pth', '.ckpt']
 
@@ -126,7 +127,7 @@ def save_prediction(model, ckpt_fpath, root_dir, input_size, batch_size, split='
         json.dump(result, f, indent=4)
 
 
-def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, process_cnt, process_pool, output_fname=None):
+def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, process_cnt, output_fname=None):
     model.eval()
     image_fnames, by_sample_bboxes = [], []
 
@@ -178,17 +179,21 @@ def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, 
             gt_bboxes_dicts.append(dict(list(gt_bboxes_dict.items())[split_length*i:split_length*(i+1)]))
             transcriptions_dicts.append(dict(list(transcriptions_dict.items())[split_length*i:split_length*(i+1)]))
     
+    process_pool = Pool(process_cnt)
+    
     datas = []
     for p, g, t in zip(pred_bboxes_dicts, gt_bboxes_dicts, transcriptions_dicts):
         datas.append([p, g, t])
         
+    # ret = process_pool.starmap(calc_deteval_metrics, datas)
+    # resDict = ret[0]
     ret = process_pool.starmap_async(calc_deteval_metrics, datas)
     results = ret.get()
     resDict = results[0]
     
     for result in results[1:]:
         resDict = dict(resDict, **result)
-
+    
     process_pool.close()
     process_pool.join()
 
@@ -196,6 +201,9 @@ def do_valdation(model, loader, gt_bboxes_dict,transcriptions_dict, input_size, 
         with open(output_fname, 'w') as f:
             json.dump(resDict, f, indent=4)
         print("@@@ saved at {} @@@".format(output_fname))
+        
+
+    
     return resDict
 
 def main(args):
