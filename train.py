@@ -89,40 +89,40 @@ def do_training(args,model,process_cnt,process_pool):
 
     for epoch in range(1,args.max_epoch+1):
         print('\n ### epoch {} ###'.format(epoch))
-        # epoch_loss, start = 0, time.time()
-        # train_dict = defaultdict(int)
-        # model.train()
-        # with tqdm(total=num_batches) as pbar:
-        #     for img, gt_score_map, gt_geo_map, roi_mask in train_loader:
-        #         #pbar.set_description('[Epoch {}]'.format(epoch + 1))
+        epoch_loss, start = 0, time.time()
+        train_dict = defaultdict(int)
+        model.train()
+        with tqdm(total=num_batches) as pbar:
+            for img, gt_score_map, gt_geo_map, roi_mask in train_loader:
+                #pbar.set_description('[Epoch {}]'.format(epoch + 1))
 
-        #         loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
-        #         optimizer.zero_grad()
-        #         loss.backward()
-        #         optimizer.step()
+                loss, extra_info = model.train_step(img, gt_score_map, gt_geo_map, roi_mask)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-        #         loss_val = loss.item()
-        #         epoch_loss += loss_val
+                loss_val = loss.item()
+                epoch_loss += loss_val
 
-        #         pbar.update(1)
-        #         tmp_dict = {
-        #             'Cls loss': extra_info['cls_loss'], 'Angle loss': extra_info['angle_loss'],
-        #             'IoU loss': extra_info['iou_loss']
-        #         }
-        #         pbar.set_postfix(tmp_dict)
+                pbar.update(1)
+                tmp_dict = {
+                    'Cls loss': extra_info['cls_loss'], 'Angle loss': extra_info['angle_loss'],
+                    'IoU loss': extra_info['iou_loss']
+                }
+                pbar.set_postfix(tmp_dict)
 
-        #         train_dict['train_total_loss'] += loss.item() / len(train_loader)
-        #         train_dict['train_cls_loss'] += extra_info['cls_loss'] / len(train_loader)
-        #         train_dict['train_angle_loss'] += extra_info['angle_loss'] / len(train_loader)
-        #         train_dict['train_iou_loss'] += extra_info['iou_loss'] / len(train_loader)
+                train_dict['train_total_loss'] += loss.item() / len(train_loader)
+                train_dict['train_cls_loss'] += extra_info['cls_loss'] / len(train_loader)
+                train_dict['train_angle_loss'] += extra_info['angle_loss'] / len(train_loader)
+                train_dict['train_iou_loss'] += extra_info['iou_loss'] / len(train_loader)
 
-        # scheduler.step()
-        # train_dict['epoch'] = epoch
-        # train_dict['learning_rate'] = optimizer.param_groups[0]['lr']
-        # wandb.log(train_dict)
+        scheduler.step()
+        train_dict['epoch'] = epoch
+        train_dict['learning_rate'] = optimizer.param_groups[0]['lr']
+        wandb.log(train_dict)
 
-        # print('[train] loss: {:.4f} | Elapsed time: {}'.format(
-        #     epoch_loss / num_batches, timedelta(seconds=time.time() - start)))
+        print('[train] loss: {:.4f} | Elapsed time: {}'.format(
+            epoch_loss / num_batches, timedelta(seconds=time.time() - start)))
 
         ### validation ###
         start = time.time()
