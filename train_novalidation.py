@@ -18,7 +18,7 @@ from east_dataset import EASTDataset
 from dataset import SceneTextDataset, ValidationDataset
 from model import EAST
 from utils.seed import set_seed
-from validation import do_valdation
+#from validation import do_valdation
 from logger.set_wandb import wandb_init
 
 import albumentations as A
@@ -66,7 +66,7 @@ def parse_args():
 
     return args
 
-def do_training(args,model,process_cnt,process_pool):
+def do_training(args,model):#,process_cnt,process_pool):
     print("\n##### TRAINING #####")
     dataset = SceneTextDataset(args.train_dir, split=args.train_name, image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
@@ -89,11 +89,12 @@ def do_training(args,model,process_cnt,process_pool):
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
     best_score, best_epoch  = 0, 0
 
-    for epoch in range(1,args.max_epoch+1):
+    model.train()
+    for epoch in range(1, args.max_epoch+1):
         print('\n ### epoch {} ###'.format(epoch))
         epoch_loss, start = 0, time.time()
         train_dict = defaultdict(int)
-        model.train()
+        #model.train()
         with tqdm(total=num_batches) as pbar:
             for img, gt_score_map, gt_geo_map, roi_mask in train_loader:
                 #pbar.set_description('[Epoch {}]'.format(epoch + 1))
@@ -130,7 +131,7 @@ def do_training(args,model,process_cnt,process_pool):
             if not osp.exists(args.model_dir):
                 os.makedirs(args.model_dir)
 
-            ckpt_fpath = osp.join(args.model_dir, 'latest.pth')
+            ckpt_fpath = osp.join(args.model_dir, 'ep' + str(epoch+1) + '.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
 
@@ -219,15 +220,16 @@ def do_warmup(args, model):
     
 def main(args):
     set_seed(args.seed)
-    process_cnt = multiprocessing.cpu_count()
-    process_pool = Pool(process_cnt)
+    #process_cnt = multiprocessing.cpu_count()
+    #process_pool = Pool(process_cnt)
     
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EAST()
-    model.to(args.device)
+    model.to(device)
 
     #if args.warmup:
     do_warmup(args, model)
-    do_training(args, model, process_cnt, process_pool)
+    do_training(args, model)#, process_cnt, process_pool)
 
 
 if __name__ == '__main__':
