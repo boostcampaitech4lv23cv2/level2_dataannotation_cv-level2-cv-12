@@ -11,14 +11,14 @@ def parse_args():
     parser = ArgumentParser()
 
     parser.add_argument('--anno_path_list', type=str, nargs='+',
-                        #default=['/opt/ml/input/data/ufo/Boostcamp_val_3.json'])
                         default=['/opt/ml/input/data/ufo/AIHub_Docs.json', 
-                                 '/opt/ml/input/data/ufo/Boostcamp_train_3.json',
-                                '/opt/ml/input/data/ufo/ICDAR17_Kor.json',
-                                 '/opt/ml/input/data/ufo/KAIST_SceneText.json'])
+                                 '/opt/ml/input/data/ufo/Boostcamp.json',
+                                 '/opt/ml/input/data/ufo/ICDAR17_Kor.json',
+                                 '/opt/ml/input/data/ufo/KAIST_SceneText.json',
+                                 '/opt/ml/input/data/ufo/ICDAR19.json'])
     parser.add_argument('--image_midpath_list', type=str, nargs='+',
-                        default=['AIHub_Docs', 'Boostcamp', 'ICDAR17_Kor', 'KAIST_SceneText'])#['Boostcamp'])#
-    parser.add_argument('--file_name', type=str, default='set2_Boostcamp3_AIDoc_ICDAR17Kor_KAIST.json')#'Boostcamp_val_3_adddir.json')#
+                        default=['AIHub_Docs', 'Boostcamp', 'ICDAR17_Kor', 'KAIST_SceneText', 'ICDAR19'])#['Boostcamp'])#
+    parser.add_argument('--file_name', type=str, default='set_all.json')#'Boostcamp_val_3_adddir.json')#
     parser.add_argument('--save_path', type=str, default='../input/data/ufo/')
 
     args = parser.parse_args()
@@ -30,7 +30,7 @@ def parse_args():
 
 # --이미지 파일은 수작업으로 sava_path의 상위 폴더에서 images 폴더를 만들어 복사해서 넣음!
 def main(args):
-    get_ratio = [1., 1., 1., 0.3]
+    get_ratio = [1., 1., 1., 0.3, 0.25]
 
     data_path = args.anno_path_list  #data_path_list
     image_midpath_list = args.image_midpath_list
@@ -46,14 +46,34 @@ def main(args):
         with open(json_, 'r') as f:
             json_data = json.load(f)
         print(f'file number {json_cnt} images :', len(json_data['images']))
+        
+        N_accept = 0
         for k in list(json_data['images'].keys()):
-            if ratio == 1.:
-                read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
-            elif random.random() <= ratio:
-                read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
-            else:
-                continue
-            
+            wordkeys = json_data['images'][k]['words'].keys()
+            if image_midpath in ['AIHub_Docs', 'Boostcamp', 'ICDAR17_Kor']:
+                if wordkeys:
+                    read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
+                    N_accept += 1
+                else: print('no word')
+
+            elif image_midpath in ['KAIST_SceneText']:
+                if random.random() <= ratio and wordkeys:
+                    read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
+                    N_accept += 1
+
+            elif image_midpath in ['ICDAR19']:
+                if wordkeys:
+                    langs = json_data['images'][k]['words'][list(wordkeys)[0]]['language']
+                    if langs:
+                        if 'ko' in langs: 
+                            read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
+                            N_accept += 1
+                        elif random.random() <= ratio:
+                            read_json['images'][osp.join(image_midpath, k)] = json_data['images'][k]
+                            N_accept += 1
+            else: assert False
+        print(N_accept)
+
     print('total images :', len(read_json['images']))
     print()
 

@@ -49,14 +49,14 @@ def parse_args():
     #parser.add_argument('--val_input_size', type=int, default=1024)
 
     parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--learning_rate', type=float, default=1e-3)
-    parser.add_argument('--max_epoch', type=int, default=200)
+    parser.add_argument('--learning_rate', type=float, default=1e-4)
+    parser.add_argument('--max_epoch', type=int, default=26)
     parser.add_argument('--save_interval', type=int, default=5)
 
     # Custom args
     parser.add_argument("--experiment_name",type=str,default="test")
     parser.add_argument("--warmup", action="store_true")
-    parser.add_argument("--warmup_epoch", type=int, default=5) 
+    parser.add_argument("--warmup_epoch", type=int, default=2) 
     parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
@@ -86,7 +86,7 @@ def do_training(args,model):#,process_cnt,process_pool):
     #val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=args.num_workers)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[60, 100, 120], gamma=0.1)
     best_score, best_epoch  = 0, 0
 
     model.train()
@@ -225,10 +225,15 @@ def main(args):
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = EAST()
+    
+    # pretrained
+    #ckpt = torch.load('/opt/ml/code/trained_models/latest.pth')
+    ckpt = torch.load('/opt/ml/level2_dataannotation_cv-level2-cv-12/trained_models/all_data3/ep15.pth')
+    model.load_state_dict(ckpt)
     model.to(device)
 
     #if args.warmup:
-    do_warmup(args, model)
+    #do_warmup(args, model)
     do_training(args, model)#, process_cnt, process_pool)
 
 
