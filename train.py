@@ -68,7 +68,7 @@ def do_training(args,model):
     num_batches = math.ceil(len(dataset) / args.batch_size)
     train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    with open(osp.join(args.val_dir, 'ufo/{}.json'.format('annotation')), 'r') as f:
+    with open(osp.join(args.val_dir, 'ufo/{}.json'.format('val_3')), 'r') as f:
         val_gt_dict = json.load(f)['images']
     val_image_dir = osp.join(args.val_dir,'images')
 
@@ -80,7 +80,7 @@ def do_training(args,model):
     val_dataset = ValidationDataset(image_fnames=list(val_gt_dict.keys()),image_dir=val_image_dir,input_size=args.val_input_size)
     val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=args.num_workers)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[args.max_epoch // 2], gamma=0.1)
     best_score, best_epoch  = 0, 0
 
@@ -206,7 +206,10 @@ def do_warmup(args, model):
 def main(args):
     set_seed(args.seed)
 
+    ckpt_pt = 'trained_models/ICDAR19_ep200/latest.pth'
+
     model = EAST()
+    model.load_state_dict(torch.load(ckpt_pt))
     model.to(args.device)
 
     if args.warmup:
