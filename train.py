@@ -26,7 +26,6 @@ from albumentations.pytorch import ToTensorV2
 from albumentations.augmentations.geometric.resize import LongestMaxSize
 
 import multiprocessing
-from multiprocessing import Pool
 
 def parse_args():
     parser = ArgumentParser()
@@ -64,7 +63,7 @@ def parse_args():
 
     return args
 
-def do_training(args,model,process_cnt,process_pool):
+def do_training(args,model,process_cnt):
     print("\n##### TRAINING #####")
     dataset = SceneTextDataset(args.train_dir, split='train', image_size=args.image_size, crop_size=args.input_size)
     dataset = EASTDataset(dataset)
@@ -126,7 +125,7 @@ def do_training(args,model,process_cnt,process_pool):
 
         ### validation ###
         start = time.time()
-        res_dict = do_valdation(model=model, loader=val_loader, gt_bboxes_dict=val_gt_dict, transcriptions_dict=val_illegibility_dict, input_size=args.val_input_size, process_cnt=process_cnt, process_pool=process_pool)
+        res_dict = do_valdation(model=model, loader=val_loader, gt_bboxes_dict=val_gt_dict, transcriptions_dict=val_illegibility_dict, input_size=args.val_input_size, process_cnt=process_cnt)
         val_dict = res_dict['total']
         val_dict['epoch'] = epoch
         wandb.log(val_dict)
@@ -209,15 +208,13 @@ def do_warmup(args, model):
 def main(args):
     set_seed(args.seed)
     process_cnt = multiprocessing.cpu_count()
-    process_pool = Pool(process_cnt)
     
     model = EAST()
     model.to(args.device)
 
     if args.warmup:
         do_warmup(args, model)
-    do_training(args, model, process_cnt, process_pool)
-
+    do_training(args, model, process_cnt)
 
 if __name__ == '__main__':
     args = parse_args()
